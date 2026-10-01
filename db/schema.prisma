@@ -1,0 +1,152 @@
+// Summertech LMS data model. Apply with `npm run db:setup`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  MENTOR
+  INSTRUCTOR
+  ADMIN
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
+enum ResourceKind {
+  VIDEO
+  PDF
+  SLIDES
+  LINK
+  OTHER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  role          Role      @default(STUDENT)
+  // Admin-controlled access. A suspended user cannot sign in.
+  active        Boolean   @default(true)
+  // scrypt "salt:hash"; null means the user has no password yet (magic-link only).
+  passwordHash  String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+
+  enrollments Enrollment[]
+  progress    LessonProgress[]
+  teaches     Course[]         @relation("CourseInstructors")
+}
+
+// Signed-out access tokens, kept until they would have expired anyway.
+model RevokedToken {
+  jti       String   @id
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+// Single-use magic-link tokens (hashed).
+model LoginToken {
+  id         String    @id @default(cuid())
+  identifier String // email
+  tokenHash  String    @unique
+  expires    DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([identifier])
+}
+
+model Course {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  area         String
+  tier         String
+  description  String
+  durationText String
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  modules     Module[]
+  enrollments Enrollment[]
+  instructors User[]       @relation("CourseInstructors")
+}
+
+model Module {
+  id       String @id @default(cuid())
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title    String
+  order    Int
+
+  lessons Lesson[]
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id              String @id @default(cuid())
+  moduleId        String
+  module          Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title           String
+  order           Int
+  contentMarkdown String @default("")
+  estMinutes      Int    @default(10)
+
+  progress  LessonProgress[]
+  resources Resource[]
+
+  @@index([moduleId])
+}
+
+model Resource {
+  id        String       @id @default(cuid())
+  lessonId  String
+  lesson    Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  kind      ResourceKind
+  title     String
+  url       String
+  sizeBytes Int?
+  order     Int          @default(0)
+  createdAt DateTime     @default(now())
+
+  @@index([lessonId])
+}
+
+model Enrollment {
+  id         String           @id @default(cuid())
+  userId     String
+  courseId   String
+  status     EnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime         @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  lessonId    String
+  completedAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+}

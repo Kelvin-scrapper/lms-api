@@ -1,0 +1,37 @@
+{
+  "name": "summertech-lms-api",
+  "version": "1.0.0",
+  "description": "REST API for the Summertech LMS: auth, courses, learning progress, tutor content and admin.",
+  "main": "src/index.js",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "db:setup": "node db/setup.js",
+    "db:seed": "node db/seed.js",
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "schema": "db/schema.prisma"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@vercel/blob": "^0.27.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0",
+    "prisma": "^6.19.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

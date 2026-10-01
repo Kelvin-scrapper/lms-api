@@ -1,0 +1,40 @@
+services:
+  api:
+    build: .
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-summertech_lms}?schema=public
+      # Defaults to production so a deploy never creates the demo accounts.
+      # Set NODE_ENV=development in .env to get them.
+      NODE_ENV: ${NODE_ENV:-production}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      # Lesson uploads when Vercel Blob isn't configured; must outlive rebuilds.
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-summertech_lms}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1 forces a TCP check, so it can't pass against Postgres's
+      # temporary socket-only init server before the real one is up.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
+  uploads_data:
