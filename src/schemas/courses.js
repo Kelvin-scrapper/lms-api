@@ -21,8 +21,18 @@ const resourceLink = z.object({
   kind: z.enum(KINDS).default('LINK'),
 });
 
-const assignInstructor = z.object({ userId: id('Tutor') });
+const uploadRequest = z.object({
+  filename: z.string({ required_error: 'File name is required.' }).trim().min(1).max(200),
+  size: z.coerce.number().int().positive('The file is empty.'),
+});
+
+const uploadedResource = z.object({
+  title: z.string().trim().max(200).optional(),
+  url: z.string().url(),
+});
+
+const assignInstructor =z.object({ userId: id('Tutor') });
 
 const enroll = z.object({ userId: id('Learner'), courseId: id('Course') });
 
-module.exports = { move, titled, updateLesson, resourceLink, assignInstructor, enroll };
+module.exports = { move, titled, updateLesson, resourceLink, uploadRequest, uploadedResource, assignInstructor, enroll };

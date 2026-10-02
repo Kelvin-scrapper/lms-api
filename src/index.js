@@ -18,6 +18,7 @@ const teachRoutes = require('./routes/teach');
 const enrollmentsRoutes = require('./routes/enrollments');
 const statsRoutes = require('./routes/stats');
 const filesRoutes = require('./routes/files');
+const jobsRoutes = require('./routes/jobs');
 const { startTokenPurge } = require('./jobs/purgeExpiredTokens');
 
 const app = express();
@@ -46,6 +47,7 @@ app.use('/teach', teachRoutes);
 app.use('/enrollments', enrollmentsRoutes);
 app.use('/stats', statsRoutes);
 app.use('/files', filesRoutes);
+app.use('/jobs', jobsRoutes);
 
 app.get('/health', async (req, res) => {
   try {
@@ -71,6 +73,9 @@ app.use((err, req, res, next) => {
     return err.code === 'LIMIT_FILE_SIZE'
       ? res.status(413).json({ error: `File is larger than ${Number(process.env.MAX_UPLOAD_MB) || 200} MB.` })
       : res.status(400).json({ error: 'Invalid upload.' });
+  }
+  if (err.status === 501) {
+    return res.status(501).json({ error: err.message });
   }
   // Prisma: a record changed or vanished between the check and the write.
   if (err.code === 'P2025') {

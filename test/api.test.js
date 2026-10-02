@@ -388,6 +388,107 @@ describe('teaching', () => {
   });
 });
 
+describe('direct uploads', () => {
+  const storage = require('../src/utils/storage');
+  const { getPayloadFromClientToken } = require('@vercel/blob/client');
+  const realDescribe = storage.describeUploadedBlob;
+  let lesson;
+
+  before(() => {
+    lesson = t.courses.web.modules[0].lessons[0];
+  });
+
+  after(() => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    storage.describeUploadedBlob = realDescribe;
+  });
+
+  it('tells the app to fall back when Blob storage is off', async () => {
+    const res = await t.request('POST', `/teach/lessons/${lesson.id}/resources/upload-url`, tokens.tutor, {
+      filename: 'intro.mp4',
+      size: 1000,
+    });
+    assert.equal(res.status, 501);
+    assert.equal(res.body.fallback, 'proxy');
+  });
+
+  it("issues a one-file upload token scoped to the lesson's folder", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = 'vercel_blob_rw_teststore_supersecretvalue1234';
+    const res = await t.request('POST', `/teach/lessons/${lesson.id}/resources/upload-url`, tokens.tutor, {
+      filename: 'Week 1 intro.mp4',
+      size: 300 * 1024 * 1024,
+    });
+    assert.equal(res.status, 200);
+    assert.match(res.body.pathname, new RegExp(`^lessons/${lesson.id}/[0-9a-f-]{36}-Week_1_intro\\.mp4$`));
+    const payload = getPayloadFromClientToken(res.body.clientToken);
+    assert.equal(payload.pathname, res.body.pathname);
+    assert.equal(payload.maximumSizeInBytes, 500 * 1024 * 1024);
+    assert.ok(payload.validUntil > Date.now());
+  });
+
+  it('rejects oversized files and other tutors', async () => {
+    const big = await t.request('POST', `/teach/lessons/${lesson.id}/resources/upload-url`, tokens.tutor, {
+      filename: 'huge.mp4',
+      size: 501 * 1024 * 1024,
+    });
+    assert.equal(big.status, 413);
+    const other = await t.request('POST', `/teach/lessons/${lesson.id}/resources/upload-url`, tokens.tutor2, {
+      filename: 'x.mp4',
+      size: 10,
+    });
+    assert.equal(other.status, 403);
+  });
+
+  it('records an uploaded file using the size reported by storage', async () => {
+    const pathname = `lessons/${lesson.id}/11111111-2222-3333-4444-555555555555-Week_1_intro.mp4`;
+    storage.describeUploadedBlob = async (url) => ({ url, pathname, size: 314572800 });
+    const res = await t.request('POST', `/teach/lessons/${lesson.id}/resources/uploaded`, tokens.tutor, {
+      url: `https://teststore.public.blob.vercel-storage.com/${pathname}`,
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.kind, 'VIDEO');
+    assert.equal(res.body.title, 'Week_1_intro.mp4');
+    assert.equal(res.body.sizeBytes, 314572800);
+  });
+
+  it("refuses files from another lesson's folder or that don't exist", async () => {
+    storage.describeUploadedBlob = async (url) => ({ url, pathname: 'lessons/someone-else/x.mp4', size: 1 });
+    const foreign = await t.request('POST', `/teach/lessons/${lesson.id}/resources/uploaded`, tokens.tutor, {
+      url: 'https://teststore.public.blob.vercel-storage.com/lessons/someone-else/x.mp4',
+    });
+    assert.equal(foreign.status, 400);
+
+    storage.describeUploadedBlob = async () => {
+      throw new Error('BlobNotFoundError');
+    };
+    const missing = await t.request('POST', `/teach/lessons/${lesson.id}/resources/uploaded`, tokens.tutor, {
+      url: 'https://teststore.public.blob.vercel-storage.com/nope.mp4',
+    });
+    assert.equal(missing.status, 400);
+  });
+});
+
+describe('scheduled jobs', () => {
+  after(() => {
+    delete process.env.CRON_SECRET;
+  });
+
+  it('is closed unless CRON_SECRET is set and sent', async () => {
+    assert.equal((await t.request('GET', '/jobs/purge-tokens')).status, 401);
+    process.env.CRON_SECRET = 'cron-secret-value';
+    assert.equal((await t.request('GET', '/jobs/purge-tokens', 'wrong')).status, 401);
+  });
+
+  it('purges used sign-in links', async () => {
+    const before = await t.prisma.loginToken.count();
+    assert.ok(before > 0);
+    const res = await t.request('GET', '/jobs/purge-tokens', 'cron-secret-value');
+    assert.equal(res.status, 200);
+    // Only used/expired links go; the unused one from the magic-link tests stays.
+    assert.ok((await t.prisma.loginToken.count()) < before);
+  });
+});
+
 describe('admin', () => {
   let newUserId;
 

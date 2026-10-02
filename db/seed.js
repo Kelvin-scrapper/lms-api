@@ -1,6 +1,6 @@
 // Idempotent; the Docker image runs it on every start.
 //  - Courses: the starting catalogue, only when the database has no courses.
-//  - Demo accounts (all environments except production): an admin, a tutor and
+//  - Demo accounts (only when NODE_ENV=development): an admin, a tutor and
 //    a student with sample progress — only created if missing.
 //  - SEED_ADMIN_EMAIL/NAME/PASSWORD: creates that admin, or resets its password
 //    and access on every start (account recovery).
@@ -107,7 +107,8 @@ async function seedRecoveryAdmin() {
 
 async function main() {
   await seedCourses();
-  if (process.env.NODE_ENV !== 'production') await seedDemoUsers();
+  // Opt-in: a live database must never get accounts with a published password.
+  if (process.env.NODE_ENV === 'development') await seedDemoUsers();
   await seedRecoveryAdmin();
 }
 

@@ -11,7 +11,8 @@
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "db:setup": "node db/setup.js",
     "db:seed": "node db/seed.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && node db/setup.js && node db/seed.js"
   },
   "prisma": {
     "schema": "db/schema.prisma"

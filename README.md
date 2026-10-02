@@ -40,7 +40,7 @@ Needs Node 20+ and PostgreSQL.
 cp .env.example .env        # then set DATABASE_URL and JWT_SECRET
 npm install
 npm run db:setup            # create/update tables
-npm run db:seed             # catalogue + demo accounts (not in production)
+npm run db:seed             # catalogue; + demo accounts if NODE_ENV=development
 npm run dev                 # http://localhost:4000
 ```
 
@@ -50,6 +50,39 @@ Demo accounts (password `Passw0rd!`): `admin@summertech.ac.ke`,
 Without `RESEND_API_KEY`, sign-in link emails are printed to the API log.
 
 Or with Docker (API + Postgres): `docker compose up -d --build`.
+
+## Deploying
+
+**Vercel** (no server to manage): import the repo as a new Vercel project. The
+included `vercel.json` runs the whole API as one function and, on each build,
+applies the schema and seeds an empty database. Set these environment variables:
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | Your Postgres (use a plan that doesn't auto-pause) |
+| `JWT_SECRET` | 32+ random characters |
+| `APP_URL`, `FRONTEND_ORIGIN` | The LMS web app's URL |
+| `BLOB_READ_WRITE_TOKEN` | Required on Vercel — uploads can't be kept on its disk |
+| `CRON_SECRET` | Any random string; enables the daily token cleanup |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Sign-in link emails |
+| `SEED_ADMIN_EMAIL` / `_PASSWORD` | Optional: create the first admin |
+
+**VPS / Docker**: `docker compose up -d --build` on the server (see
+`docker-compose.yml`); put it behind nginx/Caddy for HTTPS and set `TRUST_PROXY=1`.
+
+Never set `NODE_ENV=development` on a deployment with real data — that's what
+creates the demo accounts with the published password.
+
+## File uploads
+
+With `BLOB_READ_WRITE_TOKEN` set, the web app uploads files straight from the
+browser to Blob storage: it asks `POST /teach/lessons/:id/resources/upload-url`
+for a token that allows exactly one file in that lesson's folder (up to
+`MAX_DIRECT_UPLOAD_MB`, default 500 MB), uploads, then calls
+`POST /teach/lessons/:id/resources/uploaded`, which checks the file really
+exists in that folder before saving it. Large videos never pass through the web
+app or the API. Without Blob, uploads go through
+`POST /teach/lessons/:id/resources/upload` and are stored in `UPLOAD_DIR`.
 
 ## Tests
 
@@ -94,7 +127,9 @@ Roles: `STUDENT`, `MENTOR`, `INSTRUCTOR` (tutor), `ADMIN`.
 | PATCH / DELETE | `/teach/lessons/:id` | course tutor | Edit / delete a lesson |
 | POST | `/teach/lessons/:id/move` | course tutor | Reorder a lesson |
 | POST | `/teach/lessons/:id/resources` | course tutor | Attach a link (video, PDF, slides…) |
-| POST | `/teach/lessons/:id/resources/upload` | course tutor | Upload a file (multipart `file`, `title`) |
+| POST | `/teach/lessons/:id/resources/upload` | course tutor | Upload a file through the API (multipart `file`, `title`) |
+| POST | `/teach/lessons/:id/resources/upload-url` | course tutor | One-file token for a direct browser→Blob upload |
+| POST | `/teach/lessons/:id/resources/uploaded` | course tutor | Record a direct upload (`{url, title?}`) |
 | DELETE | `/teach/resources/:id` | course tutor | Remove a resource |
 | GET / POST | `/users` | admin | List (`?roles=INSTRUCTOR,ADMIN`) / create accounts |
 | PATCH | `/users/:id` | admin | Change role or suspend (`{role}`, `{active}`) |
@@ -102,6 +137,7 @@ Roles: `STUDENT`, `MENTOR`, `INSTRUCTOR` (tutor), `ADMIN`.
 | GET | `/stats` | admin | Platform counts |
 | GET | `/files/:key` | anyone | Uploaded files (local storage only) |
 | GET | `/health` | anyone | API + database status |
+| GET | `/jobs/purge-tokens` | scheduler (`CRON_SECRET`) | Remove used/expired sign-in links and tokens |
 
 Errors are JSON: `{ "error": "message", "field": "name" }` (`field` when one
 input is at fault).

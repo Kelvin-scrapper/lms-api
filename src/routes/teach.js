@@ -32,6 +32,8 @@ router.delete('/lessons/:id', teach.deleteLesson);
 router.post('/lessons/:id/move', validate(schemas.move), teach.moveLesson);
 router.post('/lessons/:id/resources', validate(schemas.resourceLink), teach.addResourceLink);
 router.post('/lessons/:id/resources/upload', upload.single('file'), teach.uploadResource);
+router.post('/lessons/:id/resources/upload-url', validate(schemas.uploadRequest), teach.uploadUrl);
+router.post('/lessons/:id/resources/uploaded', validate(schemas.uploadedResource), teach.registerUpload);
 
 router.delete('/resources/:id', teach.deleteResource);
 
